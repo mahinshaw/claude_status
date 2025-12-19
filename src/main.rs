@@ -12,11 +12,14 @@ struct Input {
     workspace: Workspace,
     model: Model,
     context_window: ContextWindow,
+    version: String,
 }
 
 #[derive(Deserialize)]
 struct Workspace {
     current_dir: String,
+    #[allow(dead_code)]
+    project_dir: String,
 }
 
 #[derive(Deserialize)]
@@ -164,6 +167,7 @@ fn main() {
 
     let (total_tokens, ctx_pct) = format_token_info(&input.context_window);
 
+    let version_info = format!("v{}", input.version).bold().blue();
     let model_info = format!("[{}]", input.model.display_name).bold().yellow();
     let ctx_info = format!(
         "[{}k/{}k {}%]",
@@ -175,9 +179,10 @@ fn main() {
     .blue();
 
     print!(
-        "{}{} {} {} {}",
+        "{}{} {} {} {} {}",
         current_dir.bold().cyan(),
         git_info,
+        version_info,
         model_info,
         ctx_info,
         "➜".bold().green()
@@ -190,8 +195,10 @@ mod tests {
 
     fn make_input(current_dir: &str) -> Input {
         Input {
+            version: "1.0.0".to_string(),
             workspace: Workspace {
                 current_dir: current_dir.to_string(),
+                project_dir: current_dir.to_string(),
             },
             model: Model {
                 display_name: "TestModel".to_string(),
@@ -270,8 +277,9 @@ mod tests {
     #[test]
     fn test_input_deserialization() {
         let json = r#"{
-            "workspace": {"current_dir": "/home/user/project"},
+            "workspace": {"current_dir": "/home/user/project", "project_dir": "/home/user/project"},
             "model": {"display_name": "Claude Opus"},
+            "version": "1.0.0",
             "context_window": {
                 "total_input_tokens": 1000,
                 "total_output_tokens": 500,
@@ -280,7 +288,9 @@ mod tests {
         }"#;
         let input: Input = serde_json::from_str(json).unwrap();
         assert_eq!(input.workspace.current_dir, "/home/user/project");
+        assert_eq!(input.workspace.project_dir, "/home/user/project");
         assert_eq!(input.model.display_name, "Claude Opus");
+        assert_eq!(input.version, "1.0.0");
         assert_eq!(input.context_window.total_input_tokens, 1000);
         assert_eq!(input.context_window.total_output_tokens, 500);
         assert_eq!(input.context_window.context_window_size, 200000);
