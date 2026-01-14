@@ -1,6 +1,7 @@
 use colored::{Colorize, control};
 use serde::Deserialize;
 use std::env;
+use std::error::Error;
 use std::io::{self, Read};
 use std::path::Path;
 use std::process::Command;
@@ -32,6 +33,20 @@ struct ContextWindow {
     total_input_tokens: u64,
     total_output_tokens: u64,
     context_window_size: u64,
+    used_percentage: Option<f64>,
+    #[allow(dead_code)]
+    remaining_percentage: Option<f64>,
+    #[allow(dead_code)]
+    current_usage: Option<CurrentUsage>,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct CurrentUsage {
+    input_tokens: u64,
+    output_tokens: u64,
+    cache_creation_input_tokens: u64,
+    cache_read_input_tokens: u64,
 }
 
 fn get_git_info(dir: &Path) -> Option<String> {
@@ -139,24 +154,23 @@ fn current_dir(input: &Input) -> String {
     }
 }
 
-fn format_token_info(context_window: &ContextWindow) -> (u64, u64) {
+fn format_token_info(context_window: &ContextWindow) -> (u64, f64) {
     let total_tokens = context_window.total_input_tokens + context_window.total_output_tokens;
-    let ctx_pct = total_tokens * 100 / context_window.context_window_size;
+    let ctx_pct = match context_window.used_percentage {
+        Some(pct) => pct,
+        None => (total_tokens * 100 / context_window.context_window_size) as f64,
+    };
     (total_tokens, ctx_pct)
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     control::set_override(true);
 
     let mut input_str = String::new();
-    if io::stdin().read_to_string(&mut input_str).is_err() {
-        return;
-    }
 
-    let input: Input = match serde_json::from_str(&input_str) {
-        Ok(i) => i,
-        Err(_) => return,
-    };
+    io::stdin().read_to_string(&mut input_str)?;
+
+    let input: Input = serde_json::from_str(&input_str)?;
 
     let dir = Path::new(&input.workspace.current_dir);
     let _ = env::set_current_dir(dir);
@@ -173,7 +187,7 @@ fn main() {
         "[{}k/{}k {}%]",
         total_tokens / 1000,
         input.context_window.context_window_size / 1000,
-        ctx_pct
+        ctx_pct,
     )
     .bold()
     .blue();
@@ -187,6 +201,7 @@ fn main() {
         ctx_info,
         "➜".bold().green()
     );
+    Ok(())
 }
 
 #[cfg(test)]
@@ -208,10 +223,15 @@ mod tests {
     }
 
     fn make_context_window(input: u64, output: u64, size: u64) -> ContextWindow {
+        let used = (((input + output) * 100) / size) as f64;
+        let remaining = 100.0 - used;
         ContextWindow {
             total_input_tokens: input,
             total_output_tokens: output,
             context_window_size: size,
+            current_usage: None,
+            used_percentage: Some(used),
+            remaining_percentage: Some(remaining),
         }
     }
 
@@ -247,7 +267,7 @@ mod tests {
         let ctx = make_context_window(5000, 3000, 100000);
         let (total, pct) = format_token_info(&ctx);
         assert_eq!(total, 8000);
-        assert_eq!(pct, 8);
+        assert_eq!(pct, 8.0);
     }
 
     #[test]
@@ -255,7 +275,7 @@ mod tests {
         let ctx = make_context_window(0, 0, 100000);
         let (total, pct) = format_token_info(&ctx);
         assert_eq!(total, 0);
-        assert_eq!(pct, 0);
+        assert_eq!(pct, 0.0);
     }
 
     #[test]
@@ -263,7 +283,7 @@ mod tests {
         let ctx = make_context_window(25000, 25000, 100000);
         let (total, pct) = format_token_info(&ctx);
         assert_eq!(total, 50000);
-        assert_eq!(pct, 50);
+        assert_eq!(pct, 50.0);
     }
 
     #[test]
@@ -271,7 +291,7 @@ mod tests {
         let ctx = make_context_window(60000, 40000, 100000);
         let (total, pct) = format_token_info(&ctx);
         assert_eq!(total, 100000);
-        assert_eq!(pct, 100);
+        assert_eq!(pct, 100.0);
     }
 
     #[test]
@@ -283,7 +303,9 @@ mod tests {
             "context_window": {
                 "total_input_tokens": 1000,
                 "total_output_tokens": 500,
-                "context_window_size": 200000
+                "context_window_size": 200000,
+                "used_percentage": 0.75,
+                "remaining_percentage": 25.0
             }
         }"#;
         let input: Input = serde_json::from_str(json).unwrap();
@@ -294,5 +316,7 @@ mod tests {
         assert_eq!(input.context_window.total_input_tokens, 1000);
         assert_eq!(input.context_window.total_output_tokens, 500);
         assert_eq!(input.context_window.context_window_size, 200000);
+        assert_eq!(input.context_window.remaining_percentage, Some(25.0));
+        assert_eq!(input.context_window.used_percentage, Some(0.75));
     }
 }

@@ -3,7 +3,7 @@ set -e
 
 cargo build --release
 
-mkdir -p ~/.claude
-cp target/release/claude_status ~/.claude/claude_status
+mkdir -p ~/bin
+cp -f target/release/claude_status ~/bin/claude_status
 
-echo "Installed to ~/.claude/claude_status"
+echo "Installed to ~/bin/claude_status"
