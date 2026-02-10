@@ -6,14 +6,21 @@ use std::io::{self, Read};
 use std::path::Path;
 use std::process::Command;
 
-///
-/// See https://code.claude.com/docs/en/statusline#json-input-structure
+/// Input model defines the data passed to the claude status line executable
+/// See [available data](https://code.claude.com/docs/en/statusline#available-data)
+/// See [json scehema](https://code.claude.com/docs/en/statusline#full-json-schema)
 #[derive(Deserialize)]
 struct Input {
     workspace: Workspace,
     model: Model,
     context_window: ContextWindow,
     version: String,
+    #[allow(dead_code)]
+    cost: Cost,
+    #[allow(dead_code)]
+    vim: Option<Vim>,
+    #[allow(dead_code)]
+    agent: Option<Agent>,
 }
 
 #[derive(Deserialize)]
@@ -26,6 +33,8 @@ struct Workspace {
 #[derive(Deserialize)]
 struct Model {
     display_name: String,
+    #[allow(dead_code)]
+    id: String,
 }
 
 #[derive(Deserialize)]
@@ -47,6 +56,28 @@ struct CurrentUsage {
     output_tokens: u64,
     cache_creation_input_tokens: u64,
     cache_read_input_tokens: u64,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct Cost {
+    total_cost_usd: f64,
+    total_duration_ms: u64,
+    total_api_duration_ms: u64,
+    total_lines_added: u64,
+    total_lines_removed: u64,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct Vim {
+    mode: String,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct Agent {
+    name: String,
 }
 
 fn get_git_info(dir: &Path) -> Option<String> {
@@ -217,8 +248,18 @@ mod tests {
             },
             model: Model {
                 display_name: "TestModel".to_string(),
+                id: "id".to_string(),
             },
             context_window: make_context_window(0, 0, 100000),
+            cost: Cost {
+                total_cost_usd: 0.0,
+                total_duration_ms: 0,
+                total_api_duration_ms: 0,
+                total_lines_added: 0,
+                total_lines_removed: 0,
+            },
+            vim: None,
+            agent: None,
         }
     }
 
@@ -298,7 +339,10 @@ mod tests {
     fn test_input_deserialization() {
         let json = r#"{
             "workspace": {"current_dir": "/home/user/project", "project_dir": "/home/user/project"},
-            "model": {"display_name": "Claude Opus"},
+            "model": {
+                "display_name": "Opus",
+                "id": "super opus"
+            },
             "version": "1.0.0",
             "context_window": {
                 "total_input_tokens": 1000,
@@ -306,12 +350,19 @@ mod tests {
                 "context_window_size": 200000,
                 "used_percentage": 0.75,
                 "remaining_percentage": 25.0
+            },
+            "cost": {
+                "total_cost_usd": 0.0,
+                "total_duration_ms": 0,
+                "total_api_duration_ms": 0,
+                "total_lines_added": 0,
+                "total_lines_removed": 0
             }
         }"#;
         let input: Input = serde_json::from_str(json).unwrap();
         assert_eq!(input.workspace.current_dir, "/home/user/project");
         assert_eq!(input.workspace.project_dir, "/home/user/project");
-        assert_eq!(input.model.display_name, "Claude Opus");
+        assert_eq!(input.model.display_name, "Opus");
         assert_eq!(input.version, "1.0.0");
         assert_eq!(input.context_window.total_input_tokens, 1000);
         assert_eq!(input.context_window.total_output_tokens, 500);
