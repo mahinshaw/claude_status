@@ -3,6 +3,7 @@
 A custom statusline binary for [Claude Code](https://claude.ai/code) that displays workspace, git, model, and context window information in the prompt.
 
 **Output format:**
+
 ```
  project-name on  main [!+?] v1.0.80 [Opus] [in/out: 19k context: 200k used percentage: 9.8%] ➜
 ```

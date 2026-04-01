@@ -1,4 +1,4 @@
-use colored::{Colorize, control};
+use colored::{ColoredString, Colorize, control};
 use serde::Deserialize;
 use std::env;
 use std::error::Error;
@@ -21,6 +21,7 @@ struct Input {
     vim: Option<Vim>,
     #[allow(dead_code)]
     agent: Option<Agent>,
+    rate_limits: Option<RateLimits>,
 }
 
 #[derive(Deserialize)]
@@ -78,6 +79,21 @@ struct Vim {
 #[derive(Deserialize)]
 struct Agent {
     name: String,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct RateLimits {
+    five_hour: Option<Limits>,
+    seven_day: Option<Limits>,
+}
+
+#[derive(Deserialize)]
+struct Limits {
+    /// Percentage of the 5-hour or 7-day rate limit consumed, from 0 to 100
+    used_percentage: f64,
+    /// Unix epoch seconds when the 5-hour or 7-day rate limit window resets
+    resets_at: u64,
 }
 
 fn get_git_info(dir: &Path) -> Option<String> {
@@ -204,6 +220,31 @@ fn format_token_info(context_window: &ContextWindow) -> (u64, f64) {
     (total_tokens, ctx_pct)
 }
 
+fn format_rate_limits(rate_limits: &Option<RateLimits>) -> ColoredString {
+    let five_hour = rate_limits.as_ref().and_then(|rl| rl.five_hour.as_ref());
+    let five_hour_pct = five_hour.map(|l| l.used_percentage).unwrap_or(0.0);
+    let five_hour_resets = five_hour
+        .map(|l| {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let secs = l.resets_at.saturating_sub(now);
+            let hours = secs / 3600;
+            let mins = (secs % 3600) / 60;
+            format!("{}h{}m", hours, mins)
+        })
+        .unwrap_or_else(|| "-".to_string());
+    let rate_limits_str = format!("[5h: {}% resets: {}]", five_hour_pct, five_hour_resets);
+    if five_hour_pct < 70.0 {
+        rate_limits_str.bold().green()
+    } else if five_hour_pct < 90.0 {
+        rate_limits_str.bold().yellow()
+    } else {
+        rate_limits_str.bold().red()
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     control::set_override(true);
 
@@ -232,14 +273,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     )
     .bold()
     .blue();
+    let rate_limits = format_rate_limits(&input.rate_limits);
 
     print!(
-        "{}{} {} {} {} {}",
+        "{}{} {} {} {} {} {}",
         project.bold().cyan(),
         git_info,
         version_info,
         model_info,
         ctx_info,
+        rate_limits,
         "➜".bold().green()
     );
     Ok(())
@@ -270,6 +313,7 @@ mod tests {
             },
             vim: None,
             agent: None,
+            rate_limits: None,
         }
     }
 
