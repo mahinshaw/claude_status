@@ -165,7 +165,7 @@ fn get_git_info(dir: &Path) -> Option<String> {
     Some(format!(
         " {} {}",
         "on".bold().magenta(),
-        format!("{}{}", branch, status).bold().red()
+        format!("\u{e725} {}{}", branch, status).bold().red()
     ))
 }
 
@@ -183,6 +183,16 @@ fn current_dir(input: &Input) -> String {
     } else {
         input.workspace.current_dir.clone()
     }
+}
+
+fn project(input: &Input) -> String {
+    let current = current_dir(input);
+    let project = current
+        .split('/')
+        .next_back()
+        .unwrap_or(&current)
+        .to_string();
+    format!("\u{f4d4} {}", project)
 }
 
 fn format_token_info(context_window: &ContextWindow) -> (u64, f64) {
@@ -206,7 +216,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let dir = Path::new(&input.workspace.current_dir);
     let _ = env::set_current_dir(dir);
 
-    let current_dir = current_dir(&input);
+    let project = project(&input);
 
     let git_info = get_git_info(dir).unwrap_or_default();
 
@@ -215,7 +225,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let version_info = format!("v{}", input.version).bold().blue();
     let model_info = format!("[{}]", input.model.display_name).bold().yellow();
     let ctx_info = format!(
-        "[{}k/{}k {}%]",
+        "[in/out: {}k context: {}k used percentage: {}%]",
         total_tokens / 1000,
         input.context_window.context_window_size / 1000,
         ctx_pct,
@@ -225,7 +235,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     print!(
         "{}{} {} {} {} {}",
-        current_dir.bold().cyan(),
+        project.bold().cyan(),
         git_info,
         version_info,
         model_info,
