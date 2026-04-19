@@ -235,7 +235,11 @@ fn format_rate_limits(rate_limits: &Option<RateLimits>) -> ColoredString {
             format!("{}h{}m", hours, mins)
         })
         .unwrap_or_else(|| "-".to_string());
-    let rate_limits_str = format!("[5h: {}% resets: {}]", five_hour_pct.round() as u64, five_hour_resets);
+    let rate_limits_str = format!(
+        "[5h: {}% resets: {}]",
+        five_hour_pct.round() as u64,
+        five_hour_resets
+    );
     if five_hour_pct < 70.0 {
         rate_limits_str.bold().green()
     } else if five_hour_pct < 90.0 {
@@ -281,8 +285,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         git_info,
         version_info,
         model_info,
-        ctx_info,
         rate_limits,
+        ctx_info,
         "➜".bold().green()
     );
     Ok(())
