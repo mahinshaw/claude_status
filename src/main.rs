@@ -22,6 +22,7 @@ struct Input {
     #[allow(dead_code)]
     agent: Option<Agent>,
     rate_limits: Option<RateLimits>,
+    effort: Option<Effort>,
 }
 
 #[derive(Deserialize)]
@@ -94,6 +95,12 @@ struct Limits {
     used_percentage: f64,
     /// Unix epoch seconds when the 5-hour or 7-day rate limit window resets
     resets_at: u64,
+}
+
+#[derive(Deserialize)]
+struct Effort {
+    /// Selected effort level.
+    level: String,
 }
 
 fn get_git_info(dir: &Path) -> Option<String> {
@@ -268,7 +275,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (total_tokens, ctx_pct) = format_token_info(&input.context_window);
 
     let version_info = format!("v{}", input.version).bold().blue();
-    let model_info = format!("[{}]", input.model.display_name).bold().yellow();
+    let model_info = format!(
+        "[{} - {} effort]",
+        input.model.display_name,
+        input
+            .effort
+            .map(|e| e.level.clone())
+            .unwrap_or_else(|| "unknown".to_string())
+    )
+    .bold()
+    .yellow();
     let ctx_info = format!(
         "[in/out: {}k context: {}k used percentage: {}%]",
         total_tokens / 1000,
@@ -318,6 +334,9 @@ mod tests {
             vim: None,
             agent: None,
             rate_limits: None,
+            effort: Some(Effort {
+                level: "medium".to_string(),
+            }),
         }
     }
 
